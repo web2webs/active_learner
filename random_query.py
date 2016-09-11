@@ -1,16 +1,17 @@
-from ElectedList import ElectedList
+import random
 import numpy as np
 
 
-class UncertaintyBased:
-    def __init__(self, clf, X_pool, Y_pool, X_evaluate, Y_evaluate, start_X=None, start_Y=None, random_start_number=None):
-
+class RandomQuery:
+    def __init__(self, c_list, X_pool, Y_pool, X_evaluate, Y_evaluate, start_X=None, start_Y=None,
+                 random_start_number=None):
+        self.c_list = c_list
         self.track_items = []
         self.track_best_entropy = []
         self.track_entropy = []
         self.max_entropy = None
         self.best_item_index = None
-        self.score_ = []
+        self.score_ = [[] for clf in self.c_list]
         self.t_X = []
         self.t_Y = []
         self.predict = [None] * 2
@@ -18,8 +19,6 @@ class UncertaintyBased:
         self.Y_pool = Y_pool
         self.X_evaluate = X_evaluate
         self.Y_evaluate = Y_evaluate
-        self.clf = clf
-
         if random_start_number is None:
             if (start_X is None) or (start_Y is None):
                 print "Start_X or start_Y or both are not given, we will select randomly 10 elements from pools to start..."
@@ -49,30 +48,22 @@ class UncertaintyBased:
             del self.X_pool[len(self.X_pool) - 1]
             del self.Y_pool[len(self.Y_pool) - 1]
 
-    def query(self, budget=None, step=1):
+    def query_random(self, budget=None):
         if budget is None:
             budget = len(self.X_pool)
         for a in range(0, budget):
+            for clf in self.c_list:
+                clf = clf.fit(self.t_X, self.t_Y)
+                actual_score = clf.score(self.X_evaluate, self.Y_evaluate)
+                self.score_[self.c_list.index(clf)].append(actual_score)
 
-            self.clf = self.clf.fit(self.t_X, self.t_Y)
-            actual_score = self.clf.score(self.X_evaluate, self.Y_evaluate)
-            self.score_.append(actual_score)
-            best_elements = ElectedList(size=step)
-            for item in self.X_pool:
-                predict = self.clf.predict_proba(item)
-                predict_log_proba = self.clf.predict_log_proba(item)
-                item_entropy = 0
-                for i in range(0, len(predict[0])):
-                    if predict[0][i] > 0:
-                        item_entropy = item_entropy - predict[0][i] * predict_log_proba[0][i]
-
-                best_elements.maintain([item, self.Y_pool[self.X_pool.index(item)], item_entropy])
-            best_elements.maintain_end(self.X_pool, self.Y_pool)
-            x, y = best_elements.get_elements()
-
+            best_item_index = self.X_pool.index(random.choice(self.X_pool))
+            x, y = [self.X_pool[best_item_index]], [self.Y_pool[best_item_index]]
+            print x
+            print y
             self.extend_training_set(x, y)
             self.update_pool(x)
 
             a += 1
-        return {'scores_list': self.score_, 'classifier': self.clf, 'x_pool': self.X_pool, 'y_pool': self.Y_pool, 'x_training': self.t_X, 'y_training': self.t_Y}
-
+        return {'scores_list': self.score_, 'classifier': self.c_list, 'x_pool': self.X_pool, 'y_pool': self.Y_pool,
+            'x_training': self.t_X, 'y_training': self.t_Y}
